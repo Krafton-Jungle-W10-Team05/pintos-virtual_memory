@@ -218,6 +218,7 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 /*------------------------- [P2] System Call - Thread --------------------------*/
 	/* 현재 스레드의 자식 리스트에 새로 생성한 스레드 추가 */
     struct thread *curr = thread_current();
+    // list_push_back(&curr->child_list,&t->child_elem);
     list_push_back(&curr->child_list,&t->child_elem);
 
 	/* Call the kernel_thread if it scheduled.
@@ -543,6 +544,15 @@ init_thread (struct thread *t, const char *name, int priority) {
     sema_init(&t->wait_sema,0);
     sema_init(&t->fork_sema,0);
     sema_init(&t->free_sema,0);
+
+	/* project 2 wait bug fix*/
+	t->wait_child_status.ref_cnt = 2;
+	t->wait_child_status.tid = 0;
+	t->wait_child_status.exit_code = 0;
+	lock_init(&t->wait_child_status.lock);
+	list_init(&t->wait_child_status.elem);
+	sema_init(&t->wait_child_status.dead, 0);
+	
 }
 // 준비 리스트에서 맨 앞의 스레드를 뽑아와, 컨텍스트 스위치 수행
 /* Chooses and returns the next thread to be scheduled.  Should

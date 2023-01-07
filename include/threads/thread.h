@@ -33,6 +33,10 @@ typedef int tid_t;
 #define FDT_PAGES 3
 #define FDCOUNT_LIMIT FDT_PAGES *(1<<9)
 
+/* project bug fix */
+struct wait_status *wait_status; /* This process’s completion state. */
+struct list children; /* Completion status of children. */
+
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -90,7 +94,22 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
-struct thread {
+
+/* project 2 wait bug fix */
+struct wait_status
+{
+	struct list_elem elem;	/*  ‘children’ list element. */
+	struct lock lock; 		/*  Protects ref_cnt. */
+	int ref_cnt; 			/*  2=child and parent both alive,
+								1=either child or parent alive,
+								0=child and parent both dead. */
+	tid_t tid; 				/* Child thread id. */
+	int exit_code; 			/* Child exit code, if dead. */
+	struct semaphore dead; 	/* 1=child alive, 0=child dead. */
+};
+
+struct thread 
+{
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
@@ -107,8 +126,9 @@ struct thread {
 	struct list_elem d_elem; // donations 를 위한 elem
 
 
+	/* project 2 wait bug fix */
+	struct wait_status wait_child_status;
 /*------------------------- [P2] System Call - Thread --------------------------*/
-#ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 	struct file **fdt; // 파일 디스크립터 테이블(프로세스당 개별적으로 존재)
@@ -126,6 +146,8 @@ struct thread {
     struct semaphore free_sema; // 자식 프로세스가 종료될 때까지 부모 프로세스는 대기함
 	struct semaphore wait_sema; // 자식 프로세스가 종료할때까지 대기함. 종료 상태를 저장
 	
+#ifdef USERPROG
+	
 
 #endif
 #ifdef VM
@@ -137,6 +159,8 @@ struct thread {
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
 };
+
+
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -180,3 +204,5 @@ void thread_sleep(int64_t ticks);
 bool cmp_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 #endif /* threads/thread.h */
+
+

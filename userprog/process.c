@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -48,6 +49,10 @@ process_init (void) {
  * thread id, or TID_ERROR if the thread cannot be created.
  * Notice that THIS SHOULD BE CALLED ONCE. */
 /*------------------------- [P2] Argument Passing --------------------------*/
+
+
+
+
 tid_t
 process_create_initd (const char *file_name) {
 	char *fn_copy, *save_ptr;
@@ -296,13 +301,23 @@ process_wait (tid_t child_tid UNUSED) {
 	if(child == NULL)
 		return -1;
 
-	sema_down(&child->wait_sema); // 자식 프로세스가 종료할 때까지 대기한다.
+	sema_down(&child->wait_child_status.dead); // 자식 프로세스가 종료할 때까지 대기한다.
+	// int exit_status = child->exit_status; // 자식으로 부터 종료인자를 전달 받고 리스트에서 삭제한다.
+	// 	set exit code to terminated child process’s exit code
+	int exit_status = child->wait_child_status.exit_code; // 자식으로 부터 종료인자를 전달 받고 리스트에서 삭제한다.
 
-	int exit_status = child->exit_status; // 자식으로 부터 종료인자를 전달 받고 리스트에서 삭제한다.
+	// decrease ref_cnt of child //why? need to free memory, "zombie processes"
+	/* 여기서 터짐 */
+	// lock_acquire(&child->wait_child_status.lock);
+	// child->wait_child_status.ref_cnt--;
+	// lock_release(&child->wait_child_status.lock);
+	// - Destroy the shared data structure and remove it from the
+	// list.	
 	list_remove(&child->child_elem);
-	
-	sema_up(&child->free_sema); // 자식 프로세스 종료 상태를 받은 후 자식 프로세스를 종료하게 한다.
+	/* 여기서 터짐 */
+	// list_remove(&child->wait_child_status.elem);
 
+	sema_up(&child->free_sema); // 자식 프로세스 종료 상태를 받은 후 자식 프로세스를 종료하게 한다.
 	return exit_status;
 }
 
@@ -310,22 +325,70 @@ process_wait (tid_t child_tid UNUSED) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+	struct list_elem *elem, *next;
+	struct list child_list = curr->child_list;
+	struct thread *t;
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 	
-	for (int i = 0; i < FDCOUNT_LIMIT; i++) { // 프로세스 종료 시, 메모리 누수 방지를 위해 프로세스에 열린 모든 파일 닫음
+	for (int i = 2; i < FDCOUNT_LIMIT; i++) { // 프로세스 종료 시, 메모리 누수 방지를 위해 프로세스에 열린 모든 파일 닫음
 		close(i);
 	}
+
+
 	palloc_free_multiple(curr->fdt, FDT_PAGES); // fd table 메모리 해제
 
 	file_close(curr->running); // 현재 프로세스가 실행중인 파일을 종료한다.	
 
 	process_cleanup ();
+	// - Save the exit code in the shared data
+	curr->wait_child_status.exit_code = curr->exit_status;
 
-	sema_up(&curr->wait_sema); // 부모 프로세스가 자식 프로세스의 종료상태를 확인하게 한다.
+	sema_up(&curr->wait_child_status.dead); // 부모 프로세스가 자식 프로세스의 종료상태를 확인하게 한다.
+	/*
+		Up the semaphore in the data shared with our parent
+		process (if any). In some kind of race-free way (such
+		as using a lock and a reference count or pair of boolean
+		variables in the shared data area), mark the shared data
+		as unused by us and free it if the parent is also dead
+	*/
+	// lock_acquire(&curr->wait_child_status.lock);
+	// curr->wait_child_status.ref_cnt--;
+	// lock_release(&curr->wait_child_status.lock);
+
+	// if (curr->wait_child_status.ref_cnt == 0){
+	// 	// free(&curr->wait_child_status);
+	// }else{
+	// 	// sema_up(&curr->wait_child_status.dead);
+	// }
+
+	// if (list_empty (&child_list))
+	// 	return;
+	/* - Iterate the list of children and, as in the previous
+		step, mark them as no longer used by us and free them if
+		the child is also dead. */
+	// elem = list_begin (&child_list);
+	// while ((next = list_next (elem)) != list_end (&child_list)){
+	// 	t = list_entry(elem, struct thread, child_elem);
+	// 	// lock_acquire(&curr->wait_child_status.lock);
+	// 	t->wait_child_status.ref_cnt--;
+	// 	// lock_release(&curr->wait_child_status.lock);
+
+	// 	if (t->wait_child_status.ref_cnt == 0) 
+	// 	{
+	// 		free(&t->wait_child_status);
+	// 	} 
+	// 	elem = next;
+	// }
+		
+			
+	
+	/* - Terminate the thread. */
+	
 	sema_down(&curr->free_sema); // 부모 프로세스가 자식 프로세스의 종료인자를 받을때 까지 대기한다.
+
 }
 
 /* Free the current process's resources. */
