@@ -90,6 +90,17 @@ typedef int tid_t;
  * only because they are mutually exclusive: only a thread in the
  * ready state is on the run queue, whereas only a thread in the
  * blocked state is on a semaphore wait list. */
+
+
+struct wait_status{
+	struct semaphore dead;
+	struct lock lock;
+	int ref_cnt;
+	tid_t tid;
+	int exit_code;
+	struct list_elem wait_elem;
+};
+
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
@@ -101,15 +112,8 @@ struct thread {
 	int64_t wakeup_tick; // 해당 스레드를 깨워야하는 시간(local ticks)
 
 	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* List element. */
 
 	struct list donations; // 해당 스레드에 priority donation 해준 스레드 리스트
-	struct list_elem d_elem; // donations 를 위한 elem
-
-
-/*------------------------- [P2] System Call - Thread --------------------------*/
-#ifdef USERPROG
-	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 	struct file **fdt; // 파일 디스크립터 테이블(프로세스당 개별적으로 존재)
 	int next_fd;
@@ -117,14 +121,23 @@ struct thread {
 	// Ref_92p. Hanyang Univ
 	struct intr_frame parent_if; // 부모 프레임의 정보
 	struct list child_list; // 자식 리스트
-	struct list_elem child_elem; // 자식 리스트의 element
+	struct list child_wait_list; // 자식 리스트
 	
 	struct file *running; // 현재 실행 중인 파일
-	int exit_status; // 프로세스의 종료 유무 확인
+	// int exit_status; // 프로세스의 종료 유무 확인
 
 	struct semaphore fork_sema; // fork가 완료될 때 
     struct semaphore free_sema; // 자식 프로세스가 종료될 때까지 부모 프로세스는 대기함
 	struct semaphore wait_sema; // 자식 프로세스가 종료할때까지 대기함. 종료 상태를 저장
+	struct wait_status *wait_status_p;
+	struct list_elem elem;              /* List element. */
+	struct list_elem d_elem; // donations 를 위한 elem
+	struct list_elem child_elem; // 자식 리스트의 element
+
+/*------------------------- [P2] System Call - Thread --------------------------*/
+#ifdef USERPROG
+	/* Owned by userprog/process.c. */
+
 	
 
 #endif
@@ -169,6 +182,9 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+
+void wait_status_init (struct wait_status *, tid_t tid);
 
 void do_iret (struct intr_frame *tf);
 

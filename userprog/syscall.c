@@ -163,7 +163,7 @@ halt(void) {
 void 
 exit(int status) {
 	struct thread *curr = thread_current();
-	curr->exit_status = status;
+	curr->wait_status_p->exit_code = status;
 	printf("%s: exit(%d)\n", curr->name, status);
 	thread_exit();
 }
