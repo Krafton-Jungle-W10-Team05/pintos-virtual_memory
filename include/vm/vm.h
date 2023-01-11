@@ -33,6 +33,8 @@ enum vm_type {
 
 struct page_operations;
 struct thread;
+struct hash_elem;
+struct hash;
 
 #define VM_TYPE(type) ((type) & 7)
 
