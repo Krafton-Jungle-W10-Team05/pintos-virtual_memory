@@ -35,6 +35,7 @@ static void argument_stack(int argc, char **argv, struct intr_frame *if_);
 
 /*------------------------- [P2] System Call - Thread --------------------------*/
 struct thread *get_child_process(int pid);
+struct wait_status *get_child_wait_satus(int pid);
 
 /* General process initializer for initd and other process. */
 static void
@@ -96,9 +97,10 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	if (tid == TID_ERROR)
 		return TID_ERROR;
 
-	struct thread *child = get_child_process(tid);
-	sema_down(&child->fork_sema); // wait until child loads
-	if (child->exit_status == -1)
+	// struct thread *child = get_child_process(tid);
+	struct wait_status *child_status = get_child_wait_satus(tid);
+	sema_down(&child_status->fork); // wait until child loads
+	if (child_status->exit_code == -1)
 		return TID_ERROR;
 
 	return tid;
@@ -215,13 +217,13 @@ __do_fork (void *aux) {
 	}
 
 	current->next_fd = parent->next_fd;
-	sema_up(&current->fork_sema);
+	sema_up(&current->wait_status_p->fork);
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret (&if_);
 error:
-	current -> exit_status = TID_ERROR;
-	sema_up(&current->fork_sema);
+	current -> wait_status_p-> exit_code = TID_ERROR;
+	sema_up(&current->wait_status_p->fork);
 	exit(TID_ERROR);
 	// thread_exit ();
 }
@@ -285,23 +287,66 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
+	int exit_status;
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	* XXX:       to add infinite loop here before
 	* XXX:       implementing the process_wait. */
-	// for(int i = 0 ; i<10000000; i++);
-	
-	// return -1;
-	struct thread *child = get_child_process(child_tid);
 
-	if(child == NULL)
-		return -1;
+	//기존 코드 
+	// printf("in wait start \n");
+	// struct thread *child = get_child_process(child_tid);
 
-	sema_down(&child->wait_sema); // 자식 프로세스가 종료할 때까지 대기한다.
+	// if(child == NULL){
+	// 	return -1;
+		
+	// }
+		
+	// sema_down(&child->wait_sema); // 자식 프로세스가 종료할 때까지 대기한다.
+	// exit_status = child->exit_status; // 자식으로 부터 종료인자를 전달 받고 리스트에서 삭제한다.
+	// list_remove(&child->child_elem);	
+	// sema_up(&child->free_sema); // 자식 프로세스 종료 상태를 받은 후 자식 프로세스를 종료하게 한다.
 
-	int exit_status = child->exit_status; // 자식으로 부터 종료인자를 전달 받고 리스트에서 삭제한다.
-	list_remove(&child->child_elem);
-	
-	sema_up(&child->free_sema); // 자식 프로세스 종료 상태를 받은 후 자식 프로세스를 종료하게 한다.
+	/* project2 bug fix */
+	struct thread *curr = thread_current ();
+	struct list_elem *e;
+	int find_waited_thread = 0;
+	struct wait_status *ws;
+	for (e = list_begin (&curr->child_wait_list); e != list_end (&curr->child_wait_list); e = list_next (e)) 
+	{
+		ws = list_entry (e, struct wait_status, wait_elem);
+		if (ws->tid == child_tid) 
+			{
+				find_waited_thread = 1;
+				break;
+			}
+	}
+	if (find_waited_thread == 0) 
+	{
+	 return -1;
+	}
+
+	//exit code 반환
+	// printf("[wait] curr tid : %d, child tid %d\n", curr->tid, ws->tid);
+	// printf("[wait] before dead sema %d\n", ws->dead.value);
+	//자식이 죽길 기다림 
+	sema_down(&ws->dead);
+	// printf("[wait] after dead sema %d\n", ws->dead.value);
+
+	exit_status = ws->exit_code;
+	// printf("[wait] exit_status %d\n", exit_status);
+	// lock_acquire (&ws->lock);
+
+	// ws->ref_cnt -= 1;
+	// if (ws->ref_cnt <= 0) 
+	// {
+	// 	lock_release (&ws->lock);
+	list_remove (&ws->wait_elem);
+	free(ws);
+	// } 
+	// else 
+	// {
+	// 	lock_release (&ws->lock);
+	// }
 
 	return exit_status;
 }
@@ -310,23 +355,69 @@ process_wait (tid_t child_tid UNUSED) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+	int ref_cnt1;
+	int ref_cnt2;
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	
-	for (int i = 0; i < FDCOUNT_LIMIT; i++) { // 프로세스 종료 시, 메모리 누수 방지를 위해 프로세스에 열린 모든 파일 닫음
+	// printf("in exit current tid %d\n", curr->tid);
+	/* project 2 bug fix*/
+
+	for (int i = 2; i < FDCOUNT_LIMIT; i++) { // 프로세스 종료 시, 메모리 누수 방지를 위해 프로세스에 열린 모든 파일 닫음
 		close(i);
 	}
+
 	palloc_free_multiple(curr->fdt, FDT_PAGES); // fd table 메모리 해제
-
 	file_close(curr->running); // 현재 프로세스가 실행중인 파일을 종료한다.	
-
 	process_cleanup ();
 
-	sema_up(&curr->wait_sema); // 부모 프로세스가 자식 프로세스의 종료상태를 확인하게 한다.
-	sema_down(&curr->free_sema); // 부모 프로세스가 자식 프로세스의 종료인자를 받을때 까지 대기한다.
+	// sema_up(&curr->wait_sema); 
+	// sema_down(&curr->free_sema); 
+
+	/* project 2 bug fix*/
+	struct list_elem *e;
+	e = list_begin(&curr->child_wait_list);
+	while ( e!= list_end(&curr->child_wait_list) ){
+		struct wait_status *ws = list_entry(e, struct wait_status, wait_elem);
+		// printf("child tid %d\n", ws->tid);
+		lock_acquire (&ws->lock);
+		ref_cnt1 = --ws->ref_cnt;
+		lock_release (&ws->lock);
+		if (ref_cnt1 <= 0) 
+		{
+			e = list_remove (&ws->wait_elem);
+			free (ws);
+		} 
+		else 
+		{
+			e = list_next(e);
+			// lock_release (&ws->lock);
+		}
+	}
+
+	lock_acquire (&curr->wait_status_p->lock);
+  	ref_cnt2 = --curr->wait_status_p->ref_cnt;
+    lock_release (&(curr->wait_status_p)->lock);
+
+	 if (ref_cnt2 <= 0) 
+    {
+    //   list_remove (&(curr->wait_status_p)->wait_elem);
+      free (curr->wait_status_p);
+    } 
+	else 
+	{
+	// printf("! tid : %d, ref cnt : %d, deadvalue : %d, exitcode : %d\n",(curr->wait_status_p)->tid,(curr->wait_status_p)->ref_cnt, (curr->wait_status_p)->dead.value,(curr->wait_status_p)->exit_code);
+	// lock_release (&curr->wait_status_p->lock);
+	sema_up (&curr->wait_status_p->dead);
+	// printf("@ tid : %d, ref cnt : %d, deadvalue : %d, exitcode : %d\n",(curr->wait_status_p)->tid,(curr->wait_status_p)->ref_cnt, (curr->wait_status_p)->dead.value,(curr->wait_status_p)->exit_code);
+	}
+
+	// sema_up(&curr->wait_sema); 
+	// sema_down(&curr->free_sema); 
+
 }
+
 
 /* Free the current process's resources. */
 static void
@@ -807,6 +898,20 @@ struct thread *get_child_process(int pid){
 		struct thread *t = list_entry(e, struct thread, child_elem);
 		if (t->tid == pid) // 해당 pid가 존재하면 프로세스 디스크립터 리턴
 			return t;
+	}
+	return NULL; // 리스트에 존재하지 않으면 NULL
+}
+
+struct wait_status *get_child_wait_satus(int pid){
+	struct thread *curr = thread_current();
+	struct list *child_list = &curr->child_wait_list;
+
+	// 자식 리스트를 순회하면서 프로세스 디스크립터 검색
+	for (struct list_elem *e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
+	{
+		struct wait_status *ws = list_entry(e, struct wait_status, wait_elem);
+		if (ws->tid == pid) // 해당 pid가 존재하면 프로세스 디스크립터 리턴
+			return ws;
 	}
 	return NULL; // 리스트에 존재하지 않으면 NULL
 }

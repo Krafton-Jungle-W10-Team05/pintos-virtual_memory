@@ -218,7 +218,22 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 /*------------------------- [P2] System Call - Thread --------------------------*/
 	/* 현재 스레드의 자식 리스트에 새로 생성한 스레드 추가 */
     struct thread *curr = thread_current();
-    list_push_back(&curr->child_list,&t->child_elem);
+    // list_push_back(&curr->child_list,&t->child_elem);
+
+	/* project2 bug fix */
+	 
+	 //curr는 부모 t는 자식 
+	 //현재 쓰레드의 wait_status 메모리 할당
+	t->wait_status_p = (struct wait_status *) malloc (sizeof (struct wait_status));
+	// //자식쓰레드의 tid로 초기화
+	lock_init (&t->wait_status_p->lock);
+	t->wait_status_p->ref_cnt = 2;
+	t->wait_status_p->tid = tid;
+	t->wait_status_p->exit_code = 0;
+	sema_init (&t->wait_status_p->dead, 0);
+	sema_init (&t->wait_status_p->fork, 0);
+	
+	list_push_back (&curr->child_wait_list, &t->wait_status_p->wait_elem);
 
 	/* Call the kernel_thread if it scheduled.
 	 * Note) rdi is 1st argument, and rsi is 2nd argument. */
@@ -327,7 +342,9 @@ thread_exit (void) {
 	/* Just set our status to dying and schedule another process.
 	   We will be destroyed during the call to schedule_tail(). */
 	intr_disable ();
-	list_remove(&thread_current()->elem); // 전부 사용한 thread는 all_list에서 제거
+	// list_remove(&thread_current()->elem); // 전부 사용한 thread는 all_list에서 제거	
+	// for(struct list_elem *e =list_begin (&ready_list); e!=list_end(&ready_list); e = list_next(e) ){
+	// }
 	do_schedule (THREAD_DYING);
 	NOT_REACHED ();
 }
@@ -535,14 +552,18 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->magic = THREAD_MAGIC;
 
 /*------------------------- [P2] System Call --------------------------*/
-	t->exit_status = 0;
+	// t->exit_status = 0;
 	t->running = NULL;
 
 	/* 자식 리스트 및 세마포어 초기화 */
     list_init(&t->child_list);
+    list_init(&t->child_wait_list);
     sema_init(&t->wait_sema,0);
     sema_init(&t->fork_sema,0);
     sema_init(&t->free_sema,0);
+
+	/* project 2 bug fix*/
+
 }
 // 준비 리스트에서 맨 앞의 스레드를 뽑아와, 컨텍스트 스위치 수행
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -723,4 +744,13 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+/* init function for wait_status struct. */
+void wait_status_init (struct wait_status *ws, tid_t tid){
+  lock_init (&ws->lock);
+  ws->ref_cnt = 2;
+  ws->tid = tid;
+  ws->exit_code = 0;
+  sema_init (&ws->dead, 0);
 }

@@ -73,7 +73,7 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) { // 공유 자원을 이용할 수 없는 상태
-		list_insert_ordered(&sema->waiters, &thread_current ()->elem, cmp_priority, NULL);
+		list_insert_ordered(&sema->waiters, &thread_current()->elem, cmp_priority, NULL);
 		// list_push_back (&sema->waiters, &thread_current ()->elem);
 		thread_block ();
 	}
