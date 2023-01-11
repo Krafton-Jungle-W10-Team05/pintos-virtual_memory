@@ -89,6 +89,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		exit (f->R.rdi);
 		break;
 	case SYS_FORK:
+		// memcpy(&thread_current()->parent_if, f, sizeof(struct intr_frame));
 		f->R.rax = fork (f->R.rdi, f);
 		break;
 	case SYS_EXEC:
@@ -169,7 +170,7 @@ exit(int status) {
 }
 
 pid_t fork (const char *thread_name, struct intr_frame *f) {
-	// check_address(thread_name);
+	check_address(thread_name);
 	return process_fork(thread_name, f);
 }
 

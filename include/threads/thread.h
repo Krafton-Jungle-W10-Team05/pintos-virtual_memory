@@ -94,6 +94,7 @@ typedef int tid_t;
 
 struct wait_status{
 	struct semaphore dead;
+	struct semaphore fork;
 	struct lock lock;
 	int ref_cnt;
 	tid_t tid;

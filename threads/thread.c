@@ -218,7 +218,7 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 /*------------------------- [P2] System Call - Thread --------------------------*/
 	/* 현재 스레드의 자식 리스트에 새로 생성한 스레드 추가 */
     struct thread *curr = thread_current();
-    list_push_back(&curr->child_list,&t->child_elem);
+    // list_push_back(&curr->child_list,&t->child_elem);
 
 	/* project2 bug fix */
 	 
@@ -226,12 +226,12 @@ thread_create (const char *name, int priority, thread_func *function, void *aux)
 	 //현재 쓰레드의 wait_status 메모리 할당
 	t->wait_status_p = (struct wait_status *) malloc (sizeof (struct wait_status));
 	// //자식쓰레드의 tid로 초기화
-	// wait_status_init (t->wait_status_p, t->tid);
 	lock_init (&t->wait_status_p->lock);
 	t->wait_status_p->ref_cnt = 2;
 	t->wait_status_p->tid = tid;
 	t->wait_status_p->exit_code = 0;
 	sema_init (&t->wait_status_p->dead, 0);
+	sema_init (&t->wait_status_p->fork, 0);
 	
 	list_push_back (&curr->child_wait_list, &t->wait_status_p->wait_elem);
 

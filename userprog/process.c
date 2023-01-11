@@ -97,9 +97,9 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	if (tid == TID_ERROR)
 		return TID_ERROR;
 
-	struct thread *child = get_child_process(tid);
+	// struct thread *child = get_child_process(tid);
 	struct wait_status *child_status = get_child_wait_satus(tid);
-	sema_down(&child->fork_sema); // wait until child loads
+	sema_down(&child_status->fork); // wait until child loads
 	if (child_status->exit_code == -1)
 		return TID_ERROR;
 
@@ -217,13 +217,13 @@ __do_fork (void *aux) {
 	}
 
 	current->next_fd = parent->next_fd;
-	sema_up(&current->fork_sema);
+	sema_up(&current->wait_status_p->fork);
 	/* Finally, switch to the newly created process. */
 	if (succ)
 		do_iret (&if_);
 error:
 	current -> wait_status_p-> exit_code = TID_ERROR;
-	sema_up(&current->fork_sema);
+	sema_up(&current->wait_status_p->fork);
 	exit(TID_ERROR);
 	// thread_exit ();
 }
@@ -294,12 +294,12 @@ process_wait (tid_t child_tid UNUSED) {
 
 	//기존 코드 
 	// printf("in wait start \n");
-	struct thread *child = get_child_process(child_tid);
+	// struct thread *child = get_child_process(child_tid);
 
-	if(child == NULL){
-		return -1;
+	// if(child == NULL){
+	// 	return -1;
 		
-	}
+	// }
 		
 	// sema_down(&child->wait_sema); // 자식 프로세스가 종료할 때까지 대기한다.
 	// exit_status = child->exit_status; // 자식으로 부터 종료인자를 전달 받고 리스트에서 삭제한다.
