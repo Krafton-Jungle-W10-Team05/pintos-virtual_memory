@@ -29,11 +29,12 @@ enum vm_type {
 #include "vm/file.h"
 #ifdef EFILESYS
 #include "filesys/page_cache.h"
-#include "include/lib/kernel/hash.h"
 #endif
+#include "include/lib/kernel/hash.h"
 
 struct page_operations;
 struct thread;
+
 
 #define VM_TYPE(type) ((type) & 7)
 
