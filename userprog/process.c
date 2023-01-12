@@ -34,7 +34,6 @@ static void argument_parse(char* file_name, int* argc_ptr, char* argv[]);
 static void argument_stack(int argc, char** argv, struct intr_frame* if_);
 
 /*------------------------- [P2] System Call - Thread --------------------------*/
-struct thread* get_child_process(int pid);
 struct wait_status* get_child_wait_satus(int pid);
 
 /* General process initializer for initd and other process. */
@@ -97,7 +96,6 @@ process_fork(const char* name, struct intr_frame* if_ UNUSED) {
 	if (tid == TID_ERROR)
 		return TID_ERROR;
 
-	// struct thread *child = get_child_process(tid);
 	struct wait_status* child_status = get_child_wait_satus(tid);
 	sema_down(&child_status->fork); // wait until child loads
 	if (child_status->exit_code == -1)
@@ -850,21 +848,6 @@ static void argument_stack(int argc, char** argv, struct intr_frame* if_) {
 
 
 /*------------------------- [P2] System Call - Thread --------------------------*/
-// 자식 리스트를 검색하여 해당 프로세스 디스크립터 리턴
-struct thread* get_child_process(int pid) {
-	struct thread* curr = thread_current();
-	struct list* child_list = &curr->child_list;
-
-	// 자식 리스트를 순회하면서 프로세스 디스크립터 검색
-	for (struct list_elem* e = list_begin(child_list); e != list_end(child_list); e = list_next(e))
-	{
-		struct thread* t = list_entry(e, struct thread, child_elem);
-		if (t->tid == pid) // 해당 pid가 존재하면 프로세스 디스크립터 리턴
-			return t;
-	}
-	return NULL; // 리스트에 존재하지 않으면 NULL
-}
-
 struct wait_status* get_child_wait_satus(int pid) {
 	struct thread* curr = thread_current();
 	struct list* child_list = &curr->child_wait_list;

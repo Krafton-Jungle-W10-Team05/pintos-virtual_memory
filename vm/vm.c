@@ -215,10 +215,10 @@ struct page*
 	page_lookup(const void* address) {
 	struct page p;
 	struct hash_elem* e;
-	struct thread* curr = thread_current()
+	struct thread* curr = thread_current();
 
-		p.va = address;
+	p.va = address;
 
-	e = hash_find(&curr->spt->spt_hash, &p.hash_elem); //
+	e = hash_find(&(curr->spt.spt_hash), &p.hash_elem);
 	return e != NULL ? hash_entry(e, struct page, hash_elem) : NULL;
 }
