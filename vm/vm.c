@@ -9,6 +9,7 @@
 void
 vm_init(void) {
 	vm_anon_init();
+	
 	vm_file_init();
 #ifdef EFILESYS  /* For project 4 */
 	pagecache_init();
@@ -52,6 +53,7 @@ vm_alloc_page_with_initializer(enum vm_type type, void* upage, bool writable,
 	if (spt_find_page(spt, upage) == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
+
 		 * TODO: should modify the field after calling the uninit_new. */
 
 		 /* TODO: Insert the page into the spt. */
@@ -127,9 +129,24 @@ vm_evict_frame(void) {
 static struct frame*
 vm_get_frame(void) {
 	struct frame* frame = NULL;
+	/* project 3 virtual memory */
 	/* TODO: Fill this function. */
-
+	frame = (struct frame*)malloc(sizeof(frame));	
 	ASSERT(frame != NULL);
+	
+	void *get_page = palloc_get_page(PAL_USER);
+
+	if (get_page == NULL)
+	{
+		PANIC ("todo");
+		frame->kva = NULL;
+	}
+	else
+	{
+		frame->kva = get_page;
+	}	
+
+	frame->page = NULL;
 	ASSERT(frame->page == NULL);
 	return frame;
 }
@@ -169,7 +186,14 @@ bool
 vm_claim_page(void* va UNUSED) {
 	struct page* page = NULL;
 	/* TODO: Fill this function */
+	
+	page = spt_find_page(&thread_current()->spt, va);
+	if (page == NULL)
+	{
+		return false;
+	}
 
+	// 주어진 va,즉 페이지의 가상메모리 주소를 통해 페이지를 얻어옵니다.
 	return vm_do_claim_page(page);
 }
 
@@ -177,14 +201,28 @@ vm_claim_page(void* va UNUSED) {
 static bool
 vm_do_claim_page(struct page* page) {
 	struct frame* frame = vm_get_frame();
+	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 
+	// 실질적으로 Frame과 인자로 받은 Page를 연결해주는 역할을 수행합니다.
 	/* Set links */
 	frame->page = page;
 	page->frame = frame;
 
-	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	// 그러면 우선적으로 해당 페이지가 이미 어떠한 물리 주소(kva)와 미리 연결이 되어 있는지 확인해줘야합니다.
+	if (pml4_get_page(thread_current()->pml4, page) != NULL)
+	{
+		return false;
+	}
+	// 이후 미리 연결된 kva가 없을 경우,해당 va를 kva에 set해줍니다.
+	// 최종적으로 페이지와 프레임간의 연결이 완료되었을 경우,swap_in()을 통해 해당 페이지를 물리 메모리에 올려줍니다.	
+	if (pml4_set_page(thread_current()->pml4, page->va, frame->kva, true ))
+	{
+		return swap_in(page, frame->kva);
+	}
 
-	return swap_in(page, frame->kva);
+	return false;
+
+	
 }
 
 /* Initialize new supplemental page table */
