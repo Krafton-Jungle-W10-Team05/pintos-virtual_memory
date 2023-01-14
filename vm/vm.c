@@ -47,16 +47,40 @@ vm_alloc_page_with_initializer(enum vm_type type, void* upage, bool writable,
 
 	ASSERT(VM_TYPE(type) != VM_UNINIT)
 
-		struct supplemental_page_table* spt = &thread_current()->spt;
+	struct supplemental_page_table* spt = &thread_current()->spt;
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page(spt, upage) == NULL) {
-		/* TODO: Create the page, fetch the initialier according to the VM type,
-		 * TODO: and then create "uninit" page struct by calling uninit_new. You
+		
+		//반환,  함수포인터,   함수의 인자
+		bool (*initializer)(struct page *, enum vm_type, void *);
+		
+		switch (type)
+		{
+			case VM_ANON:
+				initializer = anon_initializer;
+				break;
+			case VM_FILE:
+				initializer = file_backed_initializer;
+				break;
+			default:	
+				goto err;
+		}
 
-		 * TODO: should modify the field after calling the uninit_new. */
+		/* TODO: Create the page, fetch the initialier according to the VM type,
+		 * TODO: and then create "uninit" page struct by calling uninit_new. */
+		struct page *create_page = (struct page*) malloc(sizeof(struct page));
+		if (create_page == NULL){
+			return false;
+		}
+
+		uninit_new (create_page, upage, init, type, aux, initializer );
+		 /* TODO: You should modify the field after calling the uninit_new. */
+		create_page->writable = writable;
 
 		 /* TODO: Insert the page into the spt. */
+		return spt_insert_page(spt, create_page);
+		
 	}
 err:
 	return false;
@@ -215,7 +239,7 @@ vm_do_claim_page(struct page* page) {
 	}
 	// 이후 미리 연결된 kva가 없을 경우,해당 va를 kva에 set해줍니다.
 	// 최종적으로 페이지와 프레임간의 연결이 완료되었을 경우,swap_in()을 통해 해당 페이지를 물리 메모리에 올려줍니다.	
-	if (pml4_set_page(thread_current()->pml4, page->va, frame->kva, true ))
+	if (pml4_set_page(thread_current()->pml4, page->va, frame->kva, true))
 	{
 		return swap_in(page, frame->kva);
 	}

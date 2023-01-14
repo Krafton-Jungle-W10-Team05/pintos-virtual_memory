@@ -131,6 +131,7 @@ struct thread {
 	struct list_elem d_elem; // donations 를 위한 elem
 	struct list_elem child_elem; // 자식 리스트의 element
 
+	struct supplemental_page_table spt;
 	/*------------------------- [P2] System Call - Thread --------------------------*/
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -140,7 +141,6 @@ struct thread {
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
-	struct supplemental_page_table spt;
 #endif
 
 	/* Owned by thread.c. */

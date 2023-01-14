@@ -18,6 +18,7 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 #include "intrinsic.h"
+#define VM
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -35,6 +36,13 @@ static void argument_stack(int argc, char** argv, struct intr_frame* if_);
 
 /*------------------------- [P2] System Call - Thread --------------------------*/
 struct wait_status* get_child_wait_satus(int pid);
+
+struct file_infomation {
+    off_t offset;
+    size_t page_read_byte;
+    struct file *file;
+};
+
 
 /* General process initializer for initd and other process. */
 static void
@@ -668,6 +676,7 @@ load_segment(struct file* file, off_t ofs, uint8_t* upage,
 	ASSERT(ofs % PGSIZE == 0);
 
 	file_seek(file, ofs);
+
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -680,11 +689,11 @@ load_segment(struct file* file, off_t ofs, uint8_t* upage,
 		if (kpage == NULL)
 			return false;
 
-		/* Load this page. */
 		if (file_read(file, kpage, page_read_bytes) != (int) page_read_bytes) {
 			palloc_free_page(kpage);
 			return false;
 		}
+		
 		memset(kpage + page_read_bytes, 0, page_zero_bytes);
 
 		/* Add the page to the process's address space. */
@@ -745,8 +754,34 @@ install_page(void* upage, void* kpage, bool writable) {
 static bool
 lazy_load_segment(struct page* page, void* aux) {
 	/* TODO: Load the segment from the file */
+	// 프로세스가 uninit_page로 처음 접근하여 page_fault가 발생하면 해당 함수가 호출된다.
+	// 호출된 page를 frame과 맵핑(do calm 쪽에서 미리해줌)하고 해당 page에 연결된 물리 메모리에 file 정보를 load 해준다.
+	struct frame *load_frame = page->frame;
+	struct file_information *file_info =  (struct file_information *)aux;
+	
+	struct file* file = file_info->file;
+	off_t offset = file_info->offset;
+	size_t read_bytes = file_info->page_read_byte;
+	size_t zero_bytes = PGSIZE - read_bytes;
+
+	file_seek (file, offset);
+	/* 페이지에 매핑된 물리 메모리(frame, 커널 가상 주소)에 파일의 데이터를 읽어온다. */
+	/* 제대로 못 읽어오면 페이지를 FREE시키고 FALSE 리턴 */
+	if (file_read(file, load_frame->kva, offset) != (int)read_bytes)
+	{
+		palloc_free_page(load_frame->kva);
+		return false;
+	}
+	
+	memset(load_frame->kva + read_bytes, 0, zero_bytes);
+
+	return true;
+
 	/* TODO: This called when the first page fault occurs on address VA. */
+	
 	/* TODO: VA is available when calling this function. */
+
+	
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -770,23 +805,43 @@ load_segment(struct file* file, off_t ofs, uint8_t* upage,
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
 
-	while (read_bytes > 0 || zero_bytes > 0) {
+	// file_information 구조체를 추가하여 file을 load 할 때 필요한 file,
+	// offset, read_bytes를 저장하고 initializer를 호출하고 aux 인자로 넘겨준다.
+	// 파일을 page 단위로 끊어서 uninit 페이지로 만들고 file 정보를 page에 저장하고 SPT에 추가한다.
+
+	/* upage 주소부터 1페이지 단위씩 UNINIT 페이지를 만들어 프로세스의 spt에 넣는다(vm_alloc_page_with_initializer).
+		이 때 각 페이지의 타입에 맞게 initializer도 맞춰준다. */
+
+
+	while (read_bytes > 0 || zero_bytes > 0)
+	{
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+		// load_segment에서 일단 vm_alloc_page_with_initializer 통해 VM_UNINIT 타입의 페이지를 생성해 놓은 뒤
+		// 후에 page_fault로 initialize가 될 때 lazy_load_segment로 initialize를 하는 방식이다. 
+		//argument passing이 이루어지는 첫 번째 stack page는 eager loading을 허용한다고 매뉴얼에 나오니 참고
+		struct file_information *file_info = (struct file_information*)malloc(sizeof(struct file_information));
+		file_info->file = file;
+		file_info->offset = ofs;
+		file_info->page_read_byte = read_bytes;
+		
+		
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void* aux = NULL;
+		// void* aux = NULL;
+		// struct file_infor aux = file_infomation;
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-			writable, lazy_load_segment, aux))
+			writable, lazy_load_segment, file_info))
 			return false;
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }

@@ -22,15 +22,24 @@ void
 vm_anon_init (void) {
 	/* TODO: Set up the swap_disk. */
 	swap_disk = NULL;
+	//swap in & out 
+
 }
 
 /* Initialize the file mapping */
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
+	
+	// memset(&page->uninit, 0, sizeof(struct uninit_page));
 	/* Set up the handler */
-	page->operations = &anon_ops;
 
+
+	page->operations = &anon_ops;
+	 
 	struct anon_page *anon_page = &page->anon;
+	// anon_page에 대한 정보를 바꿔준다.anon_page에 대한 값을 생각(swap때????)
+
+	return true;
 }
 
 /* Swap in the page by read contents from the swap disk. */

@@ -45,6 +45,7 @@ struct thread;
 struct page {
 	/* Your implementation */
 	/* project 3 virtual memory */
+	bool writable;
 	struct hash_elem hash_elem;
 
 	const struct page_operations* operations;
