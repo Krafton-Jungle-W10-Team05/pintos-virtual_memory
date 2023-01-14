@@ -767,7 +767,7 @@ lazy_load_segment(struct page* page, void* aux) {
 	file_seek (file, offset);
 	/* 페이지에 매핑된 물리 메모리(frame, 커널 가상 주소)에 파일의 데이터를 읽어온다. */
 	/* 제대로 못 읽어오면 페이지를 FREE시키고 FALSE 리턴 */
-	if (file_read(file, load_frame->kva, offset) != (int)read_bytes)
+	if (file_read(file, load_frame->kva, read_bytes) != (int)read_bytes)
 	{
 		palloc_free_page(load_frame->kva);
 		return false;
