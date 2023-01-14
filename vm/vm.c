@@ -4,6 +4,7 @@
 #include "vm/vm.h"
 #include "vm/inspect.h"
 #include "include/lib/kernel/hash.h"
+#include "threads/vaddr.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -17,6 +18,9 @@ vm_init(void) {
 	register_inspect_intr();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+	//왜 하는 걸까 ? 
+	// list_init(&frame_table);
+	// start = list_begin(&frame_table);
 }
 
 /* Get the type of the page. This function is useful if you want to know the
@@ -52,7 +56,7 @@ vm_alloc_page_with_initializer(enum vm_type type, void* upage, bool writable,
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page(spt, upage) == NULL) {
 		
-		//반환,  함수포인터,   함수의 인자
+		//반환,함수포인터,함수의 인자
 		bool (*initializer)(struct page *, enum vm_type, void *);
 		
 		switch (type)
@@ -88,10 +92,12 @@ err:
 /* Find VA from spt and return page. On error, return NULL. */
 struct page*
 	spt_find_page(struct supplemental_page_table* spt UNUSED, void* va UNUSED) {
-	struct page* page = NULL;
+	struct page* page;
 	/* TODO: Fill this function. */
 	/* project 3 virtual memory */
 	/* TODO : 받아온 spt 사용처 */
+	// pg_round_down(va) (void *) ((uint64_t) (va) & ~PGMASK)
+	va = pg_round_down(va);
 	page = page_lookup(va); // va는 자체가 주소 &붙이면 안됨 
 	return page;
 }
@@ -99,7 +105,7 @@ struct page*
 /* Insert PAGE into spt with validation. */
 bool
 spt_insert_page(struct supplemental_page_table* spt UNUSED, struct page* page UNUSED) {
-	bool succ;
+	bool succ = false;
 	/* struct page을 지정된 Supplemental Page Table에 삽입
 	함수는 가상 주소가 지정된 SPT에 없는지 확인 */
 	/* project 3 virtual memory */

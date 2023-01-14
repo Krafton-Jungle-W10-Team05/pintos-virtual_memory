@@ -757,28 +757,46 @@ lazy_load_segment(struct page* page, void* aux) {
 	struct frame *load_frame = page->frame;
 	struct file_information *file_info =  (struct file_information *)aux;
 	
-	struct file* file = file_info->file;
-	off_t offset = file_info->offset;
-	size_t read_bytes = file_info->page_read_byte;
-	size_t zero_bytes = PGSIZE - read_bytes;
+	// struct file* file = file_info->file;
+	// off_t offset = file_info->offset;
+	// size_t read_bytes = file_info->page_read_byte;
+	// size_t zero_bytes = PGSIZE - read_bytes;
+
+	struct file *file = ((struct file_information *)aux)->file;
+	off_t offset = ((struct file_information *)aux)->offset;
+	size_t page_read_bytes = ((struct file_information *)aux)->page_read_byte;
+	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 	file_seek (file, offset);
 	/* 페이지에 매핑된 물리 메모리(frame, 커널 가상 주소)에 파일의 데이터를 읽어온다. */
 	/* 제대로 못 읽어오면 페이지를 FREE시키고 FALSE 리턴 */
-	if (file_read(file, load_frame->kva, read_bytes) != (int)read_bytes)
+	if (file_read(file, load_frame->kva, page_read_bytes) != (int)page_read_bytes)
 	{
 		palloc_free_page(load_frame->kva);
+		// free(aux);
 		return false;
 	}
 	
-	memset(load_frame->kva + read_bytes, 0, zero_bytes);
-
-	return true;
-
+	memset(load_frame->kva + page_read_bytes, 0, page_zero_bytes);
 	/* TODO: This called when the first page fault occurs on address VA. */
-	
 	/* TODO: VA is available when calling this function. */
+	return true;
+	/* test*/
+	//   bool success = true;
+    // struct file_information *info = (struct file_information *)aux;
+    // if (file_read_at(info->file, page->va, info->page_read_byte, info->offset) != (off_t)info->page_read_byte)
+    // {
+    //     vm_dealloc_page(page);
+    //     success = false;
+    // }
+    // else
+    // {
+    //     memset((page->va) + info->page_read_byte, 0, PGSIZE - info->page_read_byte);
+    // }
 
+    // file_close(info->file);
+    // free(aux);
+    // return success;
 	
 }
 
@@ -828,9 +846,10 @@ load_segment(struct file* file, off_t ofs, uint8_t* upage,
 		
 		
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		// void* aux = NULL;
+		void* aux = file_info;
+		
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-			writable, lazy_load_segment, file_info))
+			writable, lazy_load_segment, (void *)aux))
 			return false;
 
 		/* Advance. */
@@ -845,15 +864,24 @@ load_segment(struct file* file, off_t ofs, uint8_t* upage,
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 static bool
 setup_stack(struct intr_frame* if_) {
-	bool success = false;
-	void* stack_bottom = (void*) (((uint8_t*) USER_STACK) - PGSIZE);
+	 bool success = false;
+    void *stack_bottom = (void *)(((uint8_t *)USER_STACK) - PGSIZE);
 
-	/* TODO: Map the stack on stack_bottom and claim the page immediately.
-	 * TODO: If success, set the rsp accordingly.
-	 * TODO: You should mark the page is stack. */
-	 /* TODO: Your code goes here */
+    /* TODO: Map the stack on stack_bottom and claim the page immediately.
+     * TODO: If success, set the rsp accordingly.
+     * TODO: You should mark the page is stack. */
+    /* TODO: Your code goes here */
+    // success = vm_alloc_page(VM_ANON, stack_bottom, true);
+    // if (success)
+    // {
+    //     struct page *pg = spt_find_page(&thread_current()->spt, stack_bottom);
 
-	return success;
+    //     if (vm_claim_page(stack_bottom))
+    //         if_->rsp = (uintptr_t)USER_STACK;
+    // }
+
+    // return success;
+
 }
 #endif /* VM */
 
