@@ -3,7 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
-#include "lib/kernel/hash.h"
+#include "include/lib/kernel/hash.h"
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -63,8 +63,6 @@ vm_alloc_page_with_initializer(enum vm_type type, void* upage, bool writable,
 			case VM_FILE:
 				initializer = file_backed_initializer;
 				break;
-			default:	
-				goto err;
 		}
 
 		/* TODO: Create the page, fetch the initialier according to the VM type,
@@ -85,7 +83,6 @@ vm_alloc_page_with_initializer(enum vm_type type, void* upage, bool writable,
 err:
 	return false;
 }
-
 
 
 /* Find VA from spt and return page. On error, return NULL. */
@@ -115,7 +112,7 @@ spt_insert_page(struct supplemental_page_table* spt UNUSED, struct page* page UN
 	else
 	{
 		succ = true;
-		hash_insert(&spt->spt_hash, &page->hash_elem);
+		hash_insert(spt->spt_hash, &page->hash_elem);
 	}
 
 	return succ;
@@ -162,8 +159,9 @@ vm_get_frame(void) {
 
 	if (get_page == NULL)
 	{
-		PANIC ("todo");
+		// free(frame);
 		frame->kva = NULL;
+		PANIC ("todo");
 	}
 	else
 	{
@@ -254,7 +252,8 @@ void
 supplemental_page_table_init(struct supplemental_page_table* spt UNUSED) {
 	/* project 3 virtual memory */
 	/* TODO : 반환형을 보고 무언가를 해야하는가*/
-	hash_init(&spt->spt_hash, page_hash, page_less, NULL);
+	spt->spt_hash = (struct hash*)malloc(sizeof(struct hash));
+	hash_init(spt->spt_hash, page_hash, page_less, NULL);
 
 }
 

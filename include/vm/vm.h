@@ -93,7 +93,7 @@ struct page_operations {
  * All designs up to you for this. */
 struct supplemental_page_table {
 	/* project 3 virtual memory */
-	struct hash spt_hash;
+	struct hash *spt_hash;
 };
 
 #include "threads/thread.h"

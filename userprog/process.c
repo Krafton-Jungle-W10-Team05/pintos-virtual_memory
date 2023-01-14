@@ -82,9 +82,7 @@ initd(void* f_name) {
 #ifdef VM
 	supplemental_page_table_init(&thread_current()->spt);
 #endif
-
 	process_init();
-
 	if (process_exec(f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED();
@@ -812,7 +810,6 @@ load_segment(struct file* file, off_t ofs, uint8_t* upage,
 	/* upage 주소부터 1페이지 단위씩 UNINIT 페이지를 만들어 프로세스의 spt에 넣는다(vm_alloc_page_with_initializer).
 		이 때 각 페이지의 타입에 맞게 initializer도 맞춰준다. */
 
-
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
 		/* Do calculate how to fill this page.
@@ -832,7 +829,6 @@ load_segment(struct file* file, off_t ofs, uint8_t* upage,
 		
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		// void* aux = NULL;
-		// struct file_infor aux = file_infomation;
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
 			writable, lazy_load_segment, file_info))
 			return false;
