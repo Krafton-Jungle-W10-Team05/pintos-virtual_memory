@@ -37,6 +37,7 @@ static void argument_stack(int argc, char** argv, struct intr_frame* if_);
 /*------------------------- [P2] System Call - Thread --------------------------*/
 struct wait_status* get_child_wait_satus(int pid);
 
+/* project 3 virtual memory */
 struct file_infomation {
     off_t offset;
     size_t page_read_byte;
@@ -269,11 +270,8 @@ process_exec(void* f_name) {
 	}
 
 	/* Initialize interrupt frame and load executable. */
-	// argument_stack(argv, argc, &_if.rsp);
-	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
 
 	argument_stack(argc, argv, &_if); // argc, argv로 커맨드 라인 파싱
-	// hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true); // 메모리에 적재된 상태 출력
 
 	/* Start switched process. */
 	do_iret(&_if);
@@ -314,12 +312,8 @@ process_wait(tid_t child_tid UNUSED) {
 	{
 		return -1;
 	}
-
-
 	sema_down(&ws->dead);
-
 	exit_status = ws->exit_code;
-
 	list_remove(&ws->wait_elem);
 	free(ws);
 
@@ -336,9 +330,8 @@ process_exit(void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	 // printf("in exit current tid %d\n", curr->tid);
-	 /* project 2 bug fix*/
 
+	 /* project 2 bug fix*/
 	for (int i = 2; i < FDCOUNT_LIMIT; i++) { // 프로세스 종료 시, 메모리 누수 방지를 위해 프로세스에 열린 모든 파일 닫음
 		close(i);
 	}
@@ -352,10 +345,11 @@ process_exit(void) {
 	e = list_begin(&curr->child_wait_list);
 	while (e != list_end(&curr->child_wait_list)) {
 		struct wait_status* ws = list_entry(e, struct wait_status, wait_elem);
-		// printf("child tid %d\n", ws->tid);
+
 		lock_acquire(&ws->lock);
 		ref_cnt1 = --ws->ref_cnt;
 		lock_release(&ws->lock);
+
 		if (ref_cnt1 <= 0)
 		{
 			e = list_remove(&ws->wait_elem);
@@ -379,9 +373,6 @@ process_exit(void) {
 	{
 		sema_up(&curr->wait_status_p->dead);
 	}
-
-
-
 }
 
 
@@ -587,9 +578,6 @@ load(const char* file_name, struct intr_frame* if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
-	 /* 커맨드 라인을 파싱한다. */
-	 // argument_stack(argc, argv, if_->rsp, &if_);
-	 // argument_stack(arg_list, token_count, &if_);
 
 	success = true;
 
@@ -669,6 +657,7 @@ static bool install_page(void* upage, void* kpage, bool writable);
 static bool
 load_segment(struct file* file, off_t ofs, uint8_t* upage,
 	uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+	
 	ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
@@ -749,54 +738,30 @@ install_page(void* upage, void* kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
+
 static bool
 lazy_load_segment(struct page* page, void* aux) {
-	/* TODO: Load the segment from the file */
-	// 프로세스가 uninit_page로 처음 접근하여 page_fault가 발생하면 해당 함수가 호출된다.
-	// 호출된 page를 frame과 맵핑(do calm 쪽에서 미리해줌)하고 해당 page에 연결된 물리 메모리에 file 정보를 load 해준다.
+	/* project 3 virtual memory */
 	struct frame *load_frame = page->frame;
 	struct file_information *file_info =  (struct file_information *)aux;
 	
-	// struct file* file = file_info->file;
-	// off_t offset = file_info->offset;
-	// size_t read_bytes = file_info->page_read_byte;
-	// size_t zero_bytes = PGSIZE - read_bytes;
-
+	/* TODO: This called when the first page fault occurs on address VA. */
+	/* TODO: VA is available when calling this function. */
 	struct file *file = ((struct file_information *)aux)->file;
 	off_t offset = ((struct file_information *)aux)->offset;
 	size_t page_read_bytes = ((struct file_information *)aux)->page_read_byte;
 	size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 	file_seek (file, offset);
-	/* 페이지에 매핑된 물리 메모리(frame, 커널 가상 주소)에 파일의 데이터를 읽어온다. */
-	/* 제대로 못 읽어오면 페이지를 FREE시키고 FALSE 리턴 */
+
 	if (file_read(file, load_frame->kva, page_read_bytes) != (int)page_read_bytes)
 	{
 		palloc_free_page(load_frame->kva);
-		// free(aux);
 		return false;
 	}
 	
 	memset(load_frame->kva + page_read_bytes, 0, page_zero_bytes);
-	/* TODO: This called when the first page fault occurs on address VA. */
-	/* TODO: VA is available when calling this function. */
 	return true;
-	/* test*/
-	//   bool success = true;
-    // struct file_information *info = (struct file_information *)aux;
-    // if (file_read_at(info->file, page->va, info->page_read_byte, info->offset) != (off_t)info->page_read_byte)
-    // {
-    //     vm_dealloc_page(page);
-    //     success = false;
-    // }
-    // else
-    // {
-    //     memset((page->va) + info->page_read_byte, 0, PGSIZE - info->page_read_byte);
-    // }
-
-    // file_close(info->file);
-    // free(aux);
-    // return success;
 	
 }
 
@@ -821,12 +786,6 @@ load_segment(struct file* file, off_t ofs, uint8_t* upage,
 	ASSERT(pg_ofs(upage) == 0);
 	ASSERT(ofs % PGSIZE == 0);
 
-	// file_information 구조체를 추가하여 file을 load 할 때 필요한 file,
-	// offset, read_bytes를 저장하고 initializer를 호출하고 aux 인자로 넘겨준다.
-	// 파일을 page 단위로 끊어서 uninit 페이지로 만들고 file 정보를 page에 저장하고 SPT에 추가한다.
-
-	/* upage 주소부터 1페이지 단위씩 UNINIT 페이지를 만들어 프로세스의 spt에 넣는다(vm_alloc_page_with_initializer).
-		이 때 각 페이지의 타입에 맞게 initializer도 맞춰준다. */
 
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
@@ -835,21 +794,19 @@ load_segment(struct file* file, off_t ofs, uint8_t* upage,
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-		// load_segment에서 일단 vm_alloc_page_with_initializer 통해 VM_UNINIT 타입의 페이지를 생성해 놓은 뒤
-		// 후에 page_fault로 initialize가 될 때 lazy_load_segment로 initialize를 하는 방식이다. 
-		//argument passing이 이루어지는 첫 번째 stack page는 eager loading을 허용한다고 매뉴얼에 나오니 참고
+		
+		/* project 3 virtual memory */
 		struct file_information *file_info = (struct file_information*)malloc(sizeof(struct file_information));
 		file_info->file = file;
 		file_info->offset = ofs;
-		file_info->page_read_byte = read_bytes;
+		file_info->page_read_byte = page_read_bytes;
 		
 		
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		void* aux = file_info;
 		
 		if (!vm_alloc_page_with_initializer(VM_ANON, upage,
-			writable, lazy_load_segment, (void *)aux))
+			writable, lazy_load_segment, file_info))
 			return false;
 
 		/* Advance. */
@@ -871,17 +828,17 @@ setup_stack(struct intr_frame* if_) {
      * TODO: If success, set the rsp accordingly.
      * TODO: You should mark the page is stack. */
     /* TODO: Your code goes here */
-    // success = vm_alloc_page(VM_ANON, stack_bottom, true);
-    // if (success)
-    // {
-    //     struct page *pg = spt_find_page(&thread_current()->spt, stack_bottom);
+	/* project 3 virtual memory */
+    success = vm_alloc_page(VM_ANON, stack_bottom, true);
+    if (success)
+    {
+        struct page *pg = spt_find_page(&thread_current()->spt, stack_bottom);
 
-    //     if (vm_claim_page(stack_bottom))
-    //         if_->rsp = (uintptr_t)USER_STACK;
-    // }
+        if (vm_claim_page(stack_bottom))
+            if_->rsp = (uintptr_t)USER_STACK;
+    }
 
-    // return success;
-
+    return success;
 }
 #endif /* VM */
 

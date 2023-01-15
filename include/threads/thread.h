@@ -141,6 +141,8 @@ struct thread {
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
+	void *stack_bottom;
+	void *rsp_stack;
 #endif
 
 	/* Owned by thread.c. */

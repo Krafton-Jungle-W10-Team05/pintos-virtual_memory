@@ -45,13 +45,15 @@ struct thread;
 struct page {
 	/* Your implementation */
 	/* project 3 virtual memory */
-	bool writable;
+	void* va;              /* Address in terms of user space */
+	struct frame* frame;   /* Back reference for frame */
 	struct hash_elem hash_elem;
+	struct file_informaiton *file_info;
+	
+	bool writable;
 
 	const struct page_operations* operations;
-	void* va;              /* Address in terms of user space */
 	/* TODO : addr따로 만들어야 하는지 확인해야 한다. */
-	struct frame* frame;   /* Back reference for frame */
 
 
 	/* Per-type data are binded into the union.
@@ -93,7 +95,7 @@ struct page_operations {
  * All designs up to you for this. */
 struct supplemental_page_table {
 	/* project 3 virtual memory */
-	struct hash *spt_hash;
+	struct hash spt_hash;
 };
 
 #include "threads/thread.h"

@@ -130,8 +130,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		exit (-1);
 		break;
 	}
-	// printf ("system call!\n");
-	// thread_exit ();
+	
 }
 
 /*------------------------- [P2] System Call --------------------------*/
@@ -142,9 +141,14 @@ syscall_handler (struct intr_frame *f UNUSED) {
  */
 void 
 check_address(void *addr) {
- 	struct thread *curr = thread_current();
-	if (!is_user_vaddr(addr) || pml4_get_page(curr -> pml4, addr) == NULL || addr == NULL) // 유저 영역인지  NULL 포인터인지 확인
+ 	
+	if (addr == NULL || !is_user_vaddr(addr))
+	{
 		exit(-1);
+	}
+	/* project 3 virtual memory */
+	/* user virtual address ->  SPT에서 페이지 찾아서 리턴 */
+	return spt_find_page(&thread_current()->spt, addr);
 }
 
 /**
